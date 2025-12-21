@@ -4,267 +4,278 @@ from datetime import datetime
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
+import astrbot.api.message_components as Comp
+from astrbot.api import AstrBotConfig
 
 @register(
-    "astrbot_plugin_bilibili_livereminder", 
+    "astrbot_plugin_bilibili_livemonitor", 
     "Dayanshifu", 
     "bilibili开播下播提醒", 
     "1.0",
-    "https://github.com/Dayanshifu/astrbot_plugin_bilibili_livereminder"
+    "https://github.com/Dayanshifu/astrbot_plugin_bilibili_livemonitor"
 )
 class BilibiliLiveMonitor(Star):
-    def __init__(self, context: Context):
+    def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
-        # 从插件配置获取监控列表
-        self.monitor_list = self.get_config("monitor_list", [])
-        self.white_list_groups = self.get_config("white_list_groups", ["1044727986"])
-        self.check_interval = self.get_config("check_interval", 60)
-        
-        # 存储每个直播间状态
-        self.room_status = {}
-        self.session = None
-        
-        # 存储待发送的通知（按群号分组）
-        self.pending_notifications = {}
-        
-        asyncio.create_task(self.init_session())
-        asyncio.create_task(self.monitor_task())
+        self.config = config
 
-    async def init_session(self):
-        """初始化aiohttp会话"""
+        # 1. 修复配置读取错误
+        self.room_ids = []
+        ids_list = config.get('ids', [])
+        names_list = config.get('names', [])
+        for i in range(min(len(ids_list), len(names_list))):
+            self.room_ids.append((str(ids_list[i]), str(names_list[i])))
+        
+        # 目标群列表
+        self.target_groups = [str(g) for g in config.get('groups', [])]
+        self.check_interval = config.get("time", 60)
+        
+        # 房间状态缓存
+        self.room_status = {
+            room_id: {
+                "last_status": None,
+                "last_check_time": None,
+                "live_start_time": None,
+                "anchor_name": anchor_name
+            } for room_id, anchor_name in self.room_ids
+        }
+        
+        # 待发送的通知（按群分类，避免跨群发送）
+        self.notifications = []
+        self.session: aiohttp.ClientSession = None
+        self.running = True
+
+        # 启动监控任务
+        asyncio.create_task(self.init_and_monitor())
+        # 启动通知发送任务（独立任务，避免事件处理函数的参数问题）
+        asyncio.create_task(self.send_notifications_task())
+
+    async def create_session(self):
+        """创建aiohttp会话"""
+        if self.session:
+            try:
+                if not self.session.closed:
+                    await self.session.close()
+            except Exception as e:
+                pass#logger.error(f"关闭旧会话失败: {str(e)}")
         self.session = aiohttp.ClientSession(headers={
-            "User-Agent": "Mozilla/5.0",
-            "Referer": "https://live.bilibili.com"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Referer": "https://live.bilibili.com/"
         })
 
-    async def check_live_status(self, room_id):
-        """检查单个直播间状态"""
+    async def get_room_init(self, room_id):
+        """获取直播间基础状态"""
         try:
+            if not self.session or self.session.closed:
+                await self.create_session()
+                
+            url = f"https://api.live.bilibili.com/room/v1/Room/room_init?id={room_id}"
+            async with self.session.get(url, timeout=10) as resp:
+                data = await resp.json()
+                if data.get('code') == 0:
+                    return data['data']
+        except Exception as e:
+            pass#logger.error(f"获取直播间{room_id}基础信息失败: {str(e)}")
+        return None
+
+    async def get_room_info(self, room_id):
+        """获取直播间详细信息"""
+        try:
+            if not self.session or self.session.closed:
+                await self.create_session()
+                
             url = f"https://api.live.bilibili.com/room/v1/Room/get_info?room_id={room_id}"
             async with self.session.get(url, timeout=10) as resp:
                 data = await resp.json()
                 if data.get('code') == 0:
-                    return {
-                        'room_id': room_id,
-                        'data': data['data'],
-                        'check_time': datetime.now()
-                    }
+                    return data['data']
         except Exception as e:
-            logger.error(f"检查直播间 {room_id} 状态失败: {str(e)}")
+            pass#logger.error(f"获取直播间{room_id}详细信息失败: {str(e)}")
         return None
 
-    async def get_anchor_info(self, room_id):
-        """获取主播信息"""
+    async def check_live_status(self, room_id):
+        """检查单个直播间状态"""
         try:
-            room_url = f"https://api.live.bilibili.com/xlive/web-room/v1/index/getInfoByRoom?room_id={room_id}"
-            async with self.session.get(room_url, timeout=5) as resp:
-                room_data = await resp.json()
-                if room_data['code'] == 0:
-                    return {
-                        'name': room_data['data']['anchor']['base_info']['uname'],
-                        'title': room_data['data']['room_info']['title']
-                    }
+            init_data = await self.get_room_init(room_id)
+            if not init_data:
+                return None
+            
+            self.room_status[room_id]["last_check_time"] = datetime.now()
+            room_data = await self.get_room_info(room_id)
+            
+            return {
+                "live_status": init_data.get('live_status', 0),
+                "room_id": room_id,
+                "live_time": init_data.get('live_time'),
+                "room_info": room_data,
+                "anchor_name": self.room_status[room_id]["anchor_name"]
+            }
         except Exception as e:
-            logger.error(f"获取直播间 {room_id} 信息失败: {str(e)}")
-        return {'name': f"主播{room_id}", 'title': '未知标题'}
-
-    def is_group_in_white_list(self, group_id):
-        """检查群号是否在白名单中"""
-        if not group_id:
-            return False
-        return str(group_id) in [str(gid) for gid in self.white_list_groups]
+            pass#logger.error(f"检查直播间{room_id}状态失败: {str(e)}")
+        return None
 
     async def monitor_task(self):
-        """监控任务主循环"""
-        await asyncio.sleep(5)  # 等待session初始化
-        
-        while True:
+        """核心监控任务"""
+        while self.running:
             try:
-                if not self.monitor_list:
-                    await asyncio.sleep(self.check_interval)
-                    continue
-                
-                # 并行检查所有直播间
-                tasks = [self.check_live_status(room_info['room_id']) 
-                        for room_info in self.monitor_list]
-                results = await asyncio.gather(*tasks)
-                
-                for result in results:
-                    if result is None:
+                for room_id, _ in self.room_ids:
+                    status_data = await self.check_live_status(room_id)
+                    if not status_data:
                         continue
                     
-                    room_id = result['room_id']
-                    data = result['data']
-                    current_status = data['live_status']
+                    current_status = status_data['live_status']
+                    last_status = self.room_status[room_id]["last_status"]
                     
-                    # 获取房间配置信息
-                    room_config = next((r for r in self.monitor_list 
-                                      if r['room_id'] == room_id), None)
-                    if not room_config:
+                    # 初始化状态
+                    if last_status is None:
+                        self.room_status[room_id]["last_status"] = current_status
+                        if current_status == 1:
+                            try:
+                                live_time = status_data['live_time']
+                                self.room_status[room_id]["live_start_time"] = datetime.fromtimestamp(live_time)
+                            except (ValueError, TypeError):
+                                self.room_status[room_id]["live_start_time"] = datetime.now()
                         continue
                     
-                    anchor_name = room_config.get('anchor_name', f"主播{room_id}")
-                    
-                    # 初始化状态记录
-                    if room_id not in self.room_status:
-                        self.room_status[room_id] = {
-                            'last_status': current_status,
-                            'live_start_time': None,
-                            'anchor_name': anchor_name
-                        }
-                        logger.info(f"初始化直播间 {room_id}({anchor_name}) 状态: {'开播' if current_status == 1 else '下播'}")
-                        continue
-                    
-                    last_status = self.room_status[room_id]['last_status']
-                    
-                    # 状态变化处理
+                    # 状态变化时添加通知
                     if current_status != last_status:
-                        message = ""
-                        if current_status == 1:  # 开播
-                            live_time = datetime.fromtimestamp(data['live_time'])
-                            self.room_status[room_id]['live_start_time'] = live_time
-                            
-                            # 获取最新主播信息
-                            anchor_info = await self.get_anchor_info(room_id)
-                            actual_name = anchor_info['name']
-                            room_config['anchor_name'] = actual_name  # 更新配置中的名字
-                            self.room_status[room_id]['anchor_name'] = actual_name
-                            
-                            message = f"{actual_name}开播了！\n传送门：https://live.bilibili.com/{room_id}"
-                            if anchor_info['title'] != '未知标题':
-                                message += f"\n标题：{anchor_info['title']}"
-                                
-                        else:  # 下播
-                            actual_name = self.room_status[room_id]['anchor_name']
-                            start_time = self.room_status[room_id]['live_start_time']
-                            
-                            if start_time:
-                                duration = datetime.now() - start_time
-                                hours, remainder = divmod(duration.total_seconds(), 3600)
-                                minutes, seconds = divmod(remainder, 60)
-                                duration_text = f"{int(hours)}时{int(minutes)}分"
-                                message = f"{actual_name}的直播已结束，一共直播了{duration_text}"
-                            else:
-                                message = f"{actual_name}的直播已结束"
+                        self.room_status[room_id]["last_status"] = current_status
                         
-                        self.room_status[room_id]['last_status'] = current_status
+                        if current_status == 1:
+                            # 开播通知
+                            room_info = status_data['room_info'] or {}
+                            anchor_name = status_data['anchor_name']
+                            room_title = room_info.get('title', '无标题')
+                            room_url = f"https://live.bilibili.com/{room_id}"
+                            cover_url = room_info.get('user_cover', '')
+                            
+                            message = [
+                                Comp.Plain(f"{anchor_name}开播了喵！\n{room_title}\n传送门: {room_url}")
+                            ]
+                            if cover_url:
+                                message.append(Comp.Image.fromURL(cover_url))
+                            
+                            self.notifications.append(message)
+                            logger.info(f"直播间{room_id}({anchor_name})开播，添加通知")
                         
-                        # 为所有白名单群组添加通知
-                        for group_id in self.white_list_groups:
-                            if group_id not in self.pending_notifications:
-                                self.pending_notifications[group_id] = []
-                            self.pending_notifications[group_id].append(message)
-                        
-                        logger.info(f"直播间 {room_id} 状态变化，已为 {len(self.white_list_groups)} 个群组添加通知: {message}")
-                
+                        else:
+                            # 下播通知
+                            self.room_status[room_id]["live_start_time"] = None
+                            anchor_name = self.room_status[room_id]["anchor_name"]
+                            self.notifications.append([
+                                Comp.Plain(f"{anchor_name}的直播已结束喵。")
+                            ])
+                            logger.info(f"直播间{room_id}({anchor_name})已下播，添加通知")
+            
             except Exception as e:
-                logger.error(f"监控任务出错: {str(e)}")
+                pass#logger.error(f"监控任务出错: {str(e)}")
             
             await asyncio.sleep(self.check_interval)
 
+    async def send_notifications_task(self):
+        """
+        独立的通知发送任务（核心修复：避开事件处理函数的参数问题）
+        直接通过框架的上下文发送消息，不依赖事件处理装饰器
+        """
+        while self.running:
+            try:
+                if self.notifications and self.target_groups:
+                    # 取出所有待发送的通知
+                    notifications = self.notifications.copy()
+                    self.notifications.clear()
+                    
+                    # 向每个目标群发送通知
+                    for group_id in self.target_groups:
+                        for msg in notifications:
+                            # 使用AstrBot的上下文发送群消息
+                            await self.context.send_group_message(
+                                group_id=group_id,
+                                message_chain=msg
+                            )
+                            logger.info(f"已向群{group_id}发送通知")
+                            await asyncio.sleep(1)  # 避免发送过快被风控
+            except Exception as e:
+                pass#logger.error(f"发送通知失败: {str(e)}")
+            
+            await asyncio.sleep(5)  # 每5秒检查一次待发送通知
+
     async def get_live_info(self, room_id=None):
-        """获取直播间信息"""
-        if room_id:
-            # 获取单个直播间信息
-            room_config = next((r for r in self.monitor_list 
-                              if r['room_id'] == room_id), None)
-            if not room_config:
-                return f"未找到直播间 {room_id} 的配置"
+        """获取直播间信息（指令调用）"""
+        room_id_list = [rid for rid, _ in self.room_ids]
+        
+        if room_id and room_id in room_id_list:
+            status_data = await self.check_live_status(room_id)
+            if not status_data:
+                return f"直播间{room_id}（{self.room_status[room_id]['anchor_name']}）：无法获取直播信息，请稍后再试"
             
-            result = await self.check_live_status(room_id)
-            if result is None:
-                return f"无法获取直播间 {room_id} 的信息"
+            room_info = status_data.get('room_info', {})
+            anchor_name = status_data.get('anchor_name', '未知主播')
+            status_text = "直播中" if status_data['live_status'] == 1 else "未开播"
             
-            data = result['data']
-            anchor_name = room_config.get('anchor_name', f"主播{room_id}")
-            status_text = "直播中" if data['live_status'] == 1 else "未开播"
+            info = f"直播间ID: {room_id}\n"
+            info += f"主播: {anchor_name}\n"
+            info += f"状态: {status_text}\n"
             
-            info = f"直播间ID: {room_id}\n主播: {anchor_name}\n状态: {status_text}\n"
+            if status_data['live_status'] == 1 and self.room_status[room_id]["live_start_time"]:
+                duration = datetime.now() - self.room_status[room_id]["live_start_time"]
+                hours, remainder = divmod(duration.total_seconds(), 3600)
+                minutes, seconds = divmod(remainder, 60)
+                info += f"开播时间: {self.room_status[room_id]['live_start_time'].strftime('%Y-%m-%d %H:%M:%S')}\n"
+                info += f"直播时长: {int(hours)}小时{int(minutes)}分钟{int(seconds)}秒\n"
             
-            if data['live_status'] == 1:
-                start_time = self.room_status.get(room_id, {}).get('live_start_time')
-                if start_time:
-                    duration = datetime.now() - start_time
-                    hours, remainder = divmod(duration.total_seconds(), 3600)
-                    minutes, seconds = divmod(remainder, 60)
-                    info += f"开播时间: {start_time.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                    info += f"直播时长: {int(hours)}小时{int(minutes)}分钟{int(seconds)}秒\n"
-                
-                # 获取标题
-                anchor_info = await self.get_anchor_info(room_id)
-                info += f"标题: {anchor_info['title']}\n"
-            
-            info += f"最后检查: {result['check_time'].strftime('%Y-%m-%d %H:%M:%S')}\n"
+            info += f"标题: {room_info.get('title', '无标题')}\n"
+            if self.room_status[room_id]["last_check_time"]:
+                info += f"最后检查时间: {self.room_status[room_id]['last_check_time'].strftime('%Y-%m-%d %H:%M:%S')}\n"
             info += f"直播间链接: https://live.bilibili.com/{room_id}"
             
             return info
         else:
-            # 获取所有直播间信息
-            if not self.monitor_list:
-                return "当前没有监控任何直播间"
-            
-            info = f"监控中的直播间 ({len(self.monitor_list)}个):\n\n"
-            for i, room_config in enumerate(self.monitor_list, 1):
-                room_id = room_config['room_id']
-                anchor_name = room_config.get('anchor_name', f"主播{room_id}")
+            all_info = []
+            for room_id, _ in self.room_ids:
+                status_data = await self.check_live_status(room_id)
+                if not status_data:
+                    all_info.append(f"直播间{room_id}（{self.room_status[room_id]['anchor_name']}）：无法获取直播信息")
+                    continue
                 
-                room_status = self.room_status.get(room_id, {})
-                status_text = "直播中" if room_status.get('last_status') == 1 else "未开播"
+                room_info = status_data.get('room_info', {})
+                anchor_name = status_data.get('anchor_name', '未知主播')
+                status_text = "直播中" if status_data['live_status'] == 1 else "未开播"
                 
-                info += f"{i}. {anchor_name} (ID: {room_id}) - {status_text}\n"
+                info = f"直播间ID: {room_id}\n"
+                info += f"主播: {anchor_name}\n"
+                info += f"状态: {status_text}\n"
                 
-                if room_status.get('last_status') == 1 and room_status.get('live_start_time'):
-                    duration = datetime.now() - room_status['live_start_time']
+                if status_data['live_status'] == 1 and self.room_status[room_id]["live_start_time"]:
+                    duration = datetime.now() - self.room_status[room_id]["live_start_time"]
                     hours, remainder = divmod(duration.total_seconds(), 3600)
                     minutes, seconds = divmod(remainder, 60)
-                    info += f"   直播时长: {int(hours)}时{int(minutes)}分\n"
-                
-                info += f"   链接: https://live.bilibili.com/{room_id}\n\n"
+                    info += f"开播时间: {self.room_status[room_id]['live_start_time'].strftime('%Y-%m-%d %H:%M:%S')}\n"
+                    info += f"直播时长: {int(hours)}小时{int(minutes)}分钟{int(seconds)}秒\n"
             
-            # 添加白名单群组信息
-            info += f"\n白名单群组 ({len(self.white_list_groups)}个): {', '.join(map(str, self.white_list_groups))}"
+                info += f"标题: {room_info.get('title', '无标题')}\n"
+                info += f"直播间链接: https://live.bilibili.com/{room_id}\n"
+                all_info.append(info)
             
-            return info.strip()
+            return "所有直播间状态\n\n" + chr(10).join(all_info)
 
-    @filter.event_message_type(filter.EventMessageType.GROUP_MESSAGE)
-    async def on_group_message(self, event: AstrMessageEvent):
-        """处理群消息"""
-        group_id = event.get_group_id()
-        
-        # 检查群号是否在白名单中
-        if not self.is_group_in_white_list(group_id):
-            return
-            
-        message_str = event.message_str.strip().lower()
-        
-        # 查看所有直播间状态
-        if message_str == "liveinfo":
-            info = await self.get_live_info()
-            yield event.plain_result(info)
-        
-        # 查看特定直播间状态
-        elif message_str.startswith("liveinfo "):
-            room_id = message_str[9:].strip()
-            if room_id.isdigit():
-                info = await self.get_live_info(room_id)
-                yield event.plain_result(info)
-            else:
-                yield event.plain_result("请输入正确的直播间ID")
-        
-        # 发送该群组的待通知消息
-        group_id_str = str(group_id)
-        if group_id_str in self.pending_notifications and self.pending_notifications[group_id_str]:
-            for message in self.pending_notifications[group_id_str]:
-                yield event.plain_result(message)
-            
-            # 清空该群组的已发送通知
-            self.pending_notifications[group_id_str] = []
+    # 指令处理函数保留（无参数问题）
+    @filter.command("liveinfo")
+    async def liveinfo_command(self, event: AstrMessageEvent, room_id: str = None):
+        """liveinfo指令处理"""
+        info = await self.get_live_info(room_id)
+        yield event.plain_result(info)
+
+    async def init_and_monitor(self):
+        """初始化并启动监控"""
+        await self.create_session()
+        await self.monitor_task()
 
     async def terminate(self):
-        """清理资源"""
+        """插件停止时的清理工作"""
+        self.running = False
         try:
-            if self.session:
+            if self.session and not self.session.closed:
                 await self.session.close()
-        except:
-            pass
-        logger.info("BilibiliLiveMonitor插件已停止")
+        except Exception as e:
+            pass#logger.error(f"关闭会话失败: {str(e)}")
+        logger.info("直播间监控插件已停止")

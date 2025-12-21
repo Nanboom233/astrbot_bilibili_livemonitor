@@ -1,0 +1,27 @@
+{
+  "ids": {
+    "description": "ids",
+    "type": "list",
+    "hint": "直播间id",
+    "default": [21987615]
+    
+  },
+  "names": {
+    "description": "names",
+    "type": "list",
+    "hint": "对应ids的主播名称，与上一项长度相同",
+    "default": ["原神"]
+  },
+  "groups": {
+    "description": "groups",
+    "type": "list",
+    "hint": "qq群列表",
+    "default": [1145141919]
+  },
+  "time": {
+    "description": "time",
+    "type": "int",
+    "hint": "更新间隔",
+    "default": 60
+  }
+}
