@@ -19,18 +19,15 @@ class BilibiliLiveMonitor(Star):
         super().__init__(context)
         self.config = config
 
-        # 1. 修复配置读取错误
         self.room_ids = []
         ids_list = config.get('ids', [])
         names_list = config.get('names', [])
         for i in range(min(len(ids_list), len(names_list))):
             self.room_ids.append((str(ids_list[i]), str(names_list[i])))
         
-        # 目标群列表
         self.target_groups = [str(g) for g in config.get('groups', [])]
         self.check_interval = config.get("time", 60)
         
-        # 房间状态缓存
         self.room_status = {
             room_id: {
                 "last_status": None,
@@ -40,18 +37,14 @@ class BilibiliLiveMonitor(Star):
             } for room_id, anchor_name in self.room_ids
         }
         
-        # 待发送的通知（按群分类，避免跨群发送）
         self.notifications = []
         self.session: aiohttp.ClientSession = None
         self.running = True
 
-        # 启动监控任务
         asyncio.create_task(self.init_and_monitor())
-        # 启动通知发送任务（独立任务，避免事件处理函数的参数问题）
         asyncio.create_task(self.send_notifications_task())
 
     async def create_session(self):
-        """创建aiohttp会话"""
         if self.session:
             try:
                 if not self.session.closed:
@@ -64,7 +57,6 @@ class BilibiliLiveMonitor(Star):
         })
 
     async def get_room_init(self, room_id):
-        """获取直播间基础状态"""
         try:
             if not self.session or self.session.closed:
                 await self.create_session()
@@ -79,7 +71,6 @@ class BilibiliLiveMonitor(Star):
         return None
 
     async def get_room_info(self, room_id):
-        """获取直播间详细信息"""
         try:
             if not self.session or self.session.closed:
                 await self.create_session()
@@ -94,7 +85,6 @@ class BilibiliLiveMonitor(Star):
         return None
 
     async def check_live_status(self, room_id):
-        """检查单个直播间状态"""
         try:
             init_data = await self.get_room_init(room_id)
             if not init_data:
@@ -115,7 +105,6 @@ class BilibiliLiveMonitor(Star):
         return None
 
     async def monitor_task(self):
-        """核心监控任务"""
         while self.running:
             try:
                 for room_id, _ in self.room_ids:
@@ -126,7 +115,6 @@ class BilibiliLiveMonitor(Star):
                     current_status = status_data['live_status']
                     last_status = self.room_status[room_id]["last_status"]
                     
-                    # 初始化状态
                     if last_status is None:
                         self.room_status[room_id]["last_status"] = current_status
                         if current_status == 1:
@@ -137,12 +125,10 @@ class BilibiliLiveMonitor(Star):
                                 self.room_status[room_id]["live_start_time"] = datetime.now()
                         continue
                     
-                    # 状态变化时添加通知
                     if current_status != last_status:
                         self.room_status[room_id]["last_status"] = current_status
                         
                         if current_status == 1:
-                            # 开播通知
                             room_info = status_data['room_info'] or {}
                             anchor_name = status_data['anchor_name']
                             room_title = room_info.get('title', '无标题')
@@ -159,7 +145,6 @@ class BilibiliLiveMonitor(Star):
                             logger.info(f"直播间{room_id}({anchor_name})开播，添加通知")
                         
                         else:
-                            # 下播通知
                             self.room_status[room_id]["live_start_time"] = None
                             anchor_name = self.room_status[room_id]["anchor_name"]
                             self.notifications.append([
@@ -173,21 +158,14 @@ class BilibiliLiveMonitor(Star):
             await asyncio.sleep(self.check_interval)
 
     async def send_notifications_task(self):
-        """
-        独立的通知发送任务（核心修复：避开事件处理函数的参数问题）
-        直接通过框架的上下文发送消息，不依赖事件处理装饰器
-        """
         while self.running:
             try:
                 if self.notifications and self.target_groups:
-                    # 取出所有待发送的通知
                     notifications = self.notifications.copy()
                     self.notifications.clear()
                     
-                    # 向每个目标群发送通知
                     for group_id in self.target_groups:
                         for msg in notifications:
-                            # 使用AstrBot的上下文发送群消息
                             await self.context.send_group_message(
                                 group_id=group_id,
                                 message_chain=msg
@@ -197,10 +175,9 @@ class BilibiliLiveMonitor(Star):
             except Exception as e:
                 pass#logger.error(f"发送通知失败: {str(e)}")
             
-            await asyncio.sleep(5)  # 每5秒检查一次待发送通知
+            await asyncio.sleep(5) 
 
     async def get_live_info(self, room_id=None):
-        """获取直播间信息（指令调用）"""
         room_id_list = [rid for rid, _ in self.room_ids]
         
         if room_id and room_id in room_id_list:
@@ -261,17 +238,14 @@ class BilibiliLiveMonitor(Star):
     # 指令处理函数保留（无参数问题）
     @filter.command("liveinfo")
     async def liveinfo_command(self, event: AstrMessageEvent, room_id: str = None):
-        """liveinfo指令处理"""
         info = await self.get_live_info(room_id)
         yield event.plain_result(info)
 
     async def init_and_monitor(self):
-        """初始化并启动监控"""
         await self.create_session()
         await self.monitor_task()
 
     async def terminate(self):
-        """插件停止时的清理工作"""
         self.running = False
         try:
             if self.session and not self.session.closed:
