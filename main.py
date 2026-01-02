@@ -165,6 +165,7 @@ class BilibiliLiveMonitor(Star):
                         if current_status == 1:
                             # 新增：未发送过通知才执行发送逻辑
                             if not has_sent_notice:
+                                status_data = await self.check_live_status(room_id)
                                 room_info = status_data['room_info'] or {}
                                 anchor_name = status_data['anchor_name']
                                 room_title = room_info.get('title', '无标题')
