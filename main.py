@@ -14,7 +14,7 @@ import os
     "astrbot_plugin_bilibili_livemonitor", 
     "Dayanshifu", 
     "bilibili开播下播提醒", 
-    "1.1.0",
+    "1.1.1",
     "https://github.com/Dayanshifu/astrbot_plugin_bilibili_livemonitor"
 )
 class BilibiliLiveMonitor(Star):
@@ -284,6 +284,10 @@ class BilibiliLiveMonitor(Star):
         if str(group_id) in self.target_groups and msg_origin not in self.groups:
             self.groups.append(msg_origin)
             logger.info(f"群组{group_id}已加入有效发送列表")
+
+    async def init_and_monitor(self):
+        await self.create_session()
+        await self.monitor_task()
 
     async def terminate(self):
         self.running = False
