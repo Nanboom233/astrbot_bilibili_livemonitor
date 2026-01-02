@@ -14,7 +14,7 @@ import os
     "astrbot_plugin_bilibili_livemonitor", 
     "Dayanshifu", 
     "bilibili开播下播提醒", 
-    "1.0.1",
+    "1.1.0",
     "https://github.com/Dayanshifu/astrbot_plugin_bilibili_livemonitor"
 )
 class BilibiliLiveMonitor(Star):
@@ -274,58 +274,6 @@ class BilibiliLiveMonitor(Star):
     async def liveinfo_command(self, event: AstrMessageEvent, room_id: str = None):
         info = await self.get_live_info(room_id)
         yield event.plain_result(info)
-
-    @filter.command("livedebug")
-    async def livedebug_command(self, event: AstrMessageEvent, room_id: str = None):
-        yield event.plain_result(1)
-        for room_id, _ in self.room_ids:
-            status_data = await self.check_live_status(room_id)
-            if not status_data:
-                continue
-            
-            current_status = status_data['live_status']
-            last_status = self.room_status[room_id]["last_status"]
-            has_sent_notice = self.room_status[room_id]["has_sent_live_notice"]
-            
-            if last_status is None:
-                self.room_status[room_id]["last_status"] = current_status
-                if current_status == 1:
-                    try:
-                        live_time_str = status_data['live_time']
-                        self.room_status[room_id]["live_start_time"] = datetime.strptime(live_time_str, "%Y-%m-%d %H:%M:%S")
-                    except (ValueError, TypeError):
-                        self.room_status[room_id]["live_start_time"] = datetime.now()
-                    self.room_status[room_id]["has_sent_live_notice"] = True
-                continue
-            
-            self.room_status[room_id]["last_status"] = current_status
-            if current_status == 1 and not has_sent_notice:
-                room_info = status_data['room_info'] or {}
-                anchor_name = status_data['anchor_name']
-                room_title = room_info.get('title', '无标题')
-                room_url = f"https://live.bilibili.com/{room_id}"
-                cover_url = room_info.get('user_cover', '')
-                
-                save_path = await self.download_cover_async(cover_url, room_id)
-                message = MessageChain().message(f"{anchor_name} 开播了喵！\n{room_title}\n传送门: {room_url}")
-                if save_path and os.path.exists(save_path):
-                    message.file_image(save_path)
-                
-                for group_id in list(set(self.groups)):
-                    try:
-                        await self.context.send_message(group_id, message)
-                        logger.info(f"调试模式：已向群{group_id}发送通知")
-                    except Exception as e:
-                        logger.error(f"调试模式：向群{group_id}发送通知失败: {e}")
-                
-                self.room_status[room_id]["has_sent_live_notice"] = True
-                logger.info(f"调试模式：直播间{room_id}({anchor_name})开播通知已发送")
-        
-        await asyncio.sleep(self.check_interval)
-
-    async def init_and_monitor(self):
-        await self.create_session()
-        await self.monitor_task()
 
     @filter.event_message_type(filter.EventMessageType.GROUP_MESSAGE)
     async def on_group_message(self, event: AstrMessageEvent):
