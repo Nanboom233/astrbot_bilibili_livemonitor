@@ -1,1 +1,1 @@
-异步aiohttp存在bug `Can not decode content-encoding: br`，改为使用requests同步请求
+-
