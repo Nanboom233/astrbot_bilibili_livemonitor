@@ -56,9 +56,10 @@ class BilibiliLiveMonitor(Star):
             except Exception as e:
                 logger.error(f"关闭旧会话失败: {str(e)}")
         self.session = aiohttp.ClientSession(headers={
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Referer": "https://live.bilibili.com/"
-        })
+            "User-Agent": "Mozilla/5.0",
+            "Referer": "https://live.bilibili.com/",
+            "Accept-Encoding": "gzip, deflate"
+        },)
 
     async def get_room_init(self, room_id):
         try:
