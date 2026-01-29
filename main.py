@@ -14,7 +14,7 @@ import os
     "astrbot_plugin_bilibili_livemonitor", 
     "Dayanshifu", 
     "bilibili开播下播提醒", 
-    "1.1.1",
+    "1.1.3",
     "https://github.com/Dayanshifu/astrbot_plugin_bilibili_livemonitor"
 )
 class BilibiliLiveMonitor(Star):
