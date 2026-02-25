@@ -48,7 +48,10 @@ class BilibiliLiveMonitor(Star):
         self.config = config
 
         self.rooms = {}
-        self.check_interval = config.get("time", 60)
+        try:
+            self.check_interval = int(config.get("time", 60))
+        except (ValueError, TypeError):
+            self.check_interval = 60
 
         # 集中管理模板配置
         MessageTemplates.update_templates(config)
@@ -95,6 +98,7 @@ class BilibiliLiveMonitor(Star):
 
             for sid in sids:
                 try:
+                    logger.debug(message.get_plain_text(True))
                     await self.context.send_message(sid, message)
                     logger.info(f"已向会话 {sid} 发送 {room.anchor_name} 开播通知")
                 except Exception as e:
@@ -116,6 +120,7 @@ class BilibiliLiveMonitor(Star):
 
             for sid in sids:
                 try:
+                    logger.debug(message.get_plain_text(True))
                     await self.context.send_message(sid, message)
                     logger.info(f"已向会话 {sid} 发送 {room.anchor_name} 下播通知")
                 except Exception as e:
@@ -127,14 +132,18 @@ class BilibiliLiveMonitor(Star):
 
     async def monitor_task(self):
         while self.running:
-            try:
-                for room_id, room in self.rooms.items():
+            logger.debug("执行直播间监控任务")
+            for room_id, room in list(self.rooms.items()):
+                try:
                     await self.update_and_notify_room(room_id, room)
+                except Exception as e:
+                    logger.error(f"更新直播间 {room_id} 出错: {str(e)}")
 
+            try:
+                await asyncio.sleep(self.check_interval)
             except Exception as e:
-                logger.error(f"监控任务出错: {str(e)}")
-
-            await asyncio.sleep(self.check_interval)
+                logger.error(f"休眠时出错: {str(e)}")
+                await asyncio.sleep(60)
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @filter.command("live_sub")
