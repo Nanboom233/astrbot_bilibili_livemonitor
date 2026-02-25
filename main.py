@@ -147,7 +147,7 @@ class BilibiliLiveMonitor(Star):
                 all_info.append(await room.get_formatted_info())
             return "所有直播间状态\n\n" + "\n\n".join(all_info)
 
-    @filter.command("liveinfo")
+    @filter.command("live_info")
     async def liveinfo_command(self, event: AstrMessageEvent, room_id: Optional[str] = None):
         """获取直播间信息。可选参数: 直播间ID"""
         info = await self.get_live_info(room_id)
