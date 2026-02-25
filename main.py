@@ -13,7 +13,7 @@ from typing import Optional
 
 
 @register(
-    "astrbot_plugin_bilibili_livemonitor",
+    "astrbot_bilibili_livemonitor",
     "Dayanshifu,Nanboom233",
     "bilibili开播下播提醒",
     "1.3",
