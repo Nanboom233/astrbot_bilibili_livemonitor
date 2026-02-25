@@ -127,11 +127,21 @@ class BilibiliLiveMonitor(Star):
 
             await asyncio.sleep(self.check_interval)
 
+    @filter.permission_type(filter.PermissionType.ADMIN)
     @filter.command("live_sub")
-    async def live_sub_command(self, event: AstrMessageEvent, sid: str, live_id: str, anchor_name: str = ""):
+    async def live_sub_command(self, event: AstrMessageEvent, *args, **kwargs):
         """订阅直播间通知。参数: sid 直播间ID [主播名称]"""
-        if not anchor_name:
-            anchor_name = live_id
+        sid = args[0] if len(args) > 0 else kwargs.get("sid", "")
+        live_id = args[1] if len(args) > 1 else kwargs.get("live_id", "")
+        anchor_name = args[2] if len(args) > 2 else kwargs.get("anchor_name", "")
+        
+        sid = str(sid).strip() if sid else ""
+        live_id = str(live_id).strip() if live_id else ""
+        anchor_name = str(anchor_name).strip() if anchor_name else live_id
+        
+        if not sid or not live_id:
+            yield event.plain_result("参数错误。用法: /live_sub <sid> <live_id> [主播名称]")
+            return
 
         subs = await self.get_kv_data("subs", {})
         
@@ -149,10 +159,21 @@ class BilibiliLiveMonitor(Star):
             yield event.plain_result(MessageTemplates.msg_sub_exist.render(
                 sid=sid, live_id=live_id
             ))
-            
+
+    @filter.permission_type(filter.PermissionType.ADMIN)
     @filter.command("live_unsub")
-    async def live_unsub_command(self, event: AstrMessageEvent, sid: str, live_id: str):
+    async def live_unsub_command(self, event: AstrMessageEvent, *args, **kwargs):
         """取消订阅直播间通知。参数: sid 直播间ID"""
+        sid = args[0] if len(args) > 0 else kwargs.get("sid", "")
+        live_id = args[1] if len(args) > 1 else kwargs.get("live_id", "")
+        
+        sid = str(sid).strip() if sid else ""
+        live_id = str(live_id).strip() if live_id else ""
+        
+        if not sid or not live_id:
+            yield event.plain_result("参数错误。用法: /live_unsub <sid> <live_id>")
+            return
+            
         subs = await self.get_kv_data("subs", {})
         if live_id in subs and sid in subs[live_id]["sids"]:
             subs[live_id]["sids"].remove(sid)
@@ -197,10 +218,11 @@ class BilibiliLiveMonitor(Star):
                 all_info.append(info)
             return MessageTemplates.msg_all_info_header.render() + "\n\n".join(all_info)
 
+    @filter.permission_type(filter.PermissionType.ADMIN)
     @filter.command("live_info")
-    async def live_info_command(self, event: AstrMessageEvent, room_id: str = ""):
+    async def live_info_command(self, event: AstrMessageEvent, room_id: str = None):
         """获取直播间信息。可选参数: 直播间ID"""
-        target_id = room_id.strip() if room_id else None
+        target_id = str(room_id).strip() if room_id else None
         info = await self.get_live_info(target_id)
         yield event.plain_result(info)
 
