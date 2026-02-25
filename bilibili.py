@@ -26,8 +26,8 @@ class BilibiliLiveRoom:
             except Exception as e:
                 logger.error(f"关闭会话失败: {str(e)}")
 
-    def __init__(self, room_id: str, anchor_name: str):
-        self.room_id = str(room_id)
+    def __init__(self, room_id: int, anchor_name: str):
+        self.room_id = int(room_id)
         self.anchor_name = str(anchor_name)
         self.last_status = None
         self.last_check_time = None
@@ -143,7 +143,7 @@ class BilibiliLiveRoom:
             logger.warning(f"解析直播间{self.room_id}开播时间失败，使用当前时间替代: {e}")
             self.live_start_time = datetime.now()
 
-    def get_formatted_info(self, update_result: dict | None) -> str:
+    def get_formatted_info(self, update_result: Optional[dict]) -> str:
         if not update_result:
             return MessageTemplates.msg_live_info_fail.render(
                 anchor_name=self.anchor_name,

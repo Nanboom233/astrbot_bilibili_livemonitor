@@ -1,7 +1,7 @@
 import asyncio
 import os
-import yaml
 
+import yaml
 from astrbot.api import AstrBotConfig
 from astrbot.api import logger
 from astrbot.api.event import MessageChain
@@ -31,7 +31,9 @@ def load_metadata():
 
     return data
 
+
 PLUGIN_META = load_metadata()
+
 
 @register(
     PLUGIN_META["name"],
@@ -52,15 +54,22 @@ class BilibiliLiveMonitor(Star):
         MessageTemplates.update_templates(config)
         self.running = True
 
+    async def _get_subs(self) -> dict:
+        subs = await self.get_kv_data("subs", {})
+        return {int(k): v for k, v in subs.items()}
+
+    async def _save_subs(self, subs: dict):
+        await self.put_kv_data("subs", {str(k): v for k, v in subs.items()})
+
     @filter.on_astrbot_loaded()
     async def load_subs(self):
-        subs = await self.get_kv_data("subs", {})
+        subs = await self._get_subs()
         for live_id, data in subs.items():
-            self.rooms[live_id] = BilibiliLiveRoom(live_id, data.get("anchor_name", live_id))
+            self.rooms[live_id] = BilibiliLiveRoom(live_id, data.get("anchor_name", str(live_id)))
 
         asyncio.create_task(self.monitor_task())
 
-    async def update_and_notify_room(self, room_id: str, room: BilibiliLiveRoom) -> dict | None:
+    async def update_and_notify_room(self, room_id: int, room: BilibiliLiveRoom) -> Optional[dict]:
         result = await room.update_info()
         if not result:
             return None
@@ -81,7 +90,7 @@ class BilibiliLiveMonitor(Star):
             else:
                 message.message(MessageTemplates.msg_cover_fail.render())
 
-            subs = await self.get_kv_data("subs", {})
+            subs = await self._get_subs()
             sids = subs.get(room_id, {}).get("sids", [])
 
             for sid in sids:
@@ -102,7 +111,7 @@ class BilibiliLiveMonitor(Star):
 
             message = MessageChain().message(msg_text)
 
-            subs = await self.get_kv_data("subs", {})
+            subs = await self._get_subs()
             sids = subs.get(room_id, {}).get("sids", [])
 
             for sid in sids:
@@ -129,35 +138,17 @@ class BilibiliLiveMonitor(Star):
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @filter.command("live_sub")
-    async def live_sub_command(self, event: AstrMessageEvent, *args, **kwargs):
+    async def live_sub_command(self, event: AstrMessageEvent, sid: str, live_id: int, anchor_name: Optional[str] = None):
         """订阅直播间通知。参数: sid 直播间ID [主播名称]"""
-        sid = args[0] if len(args) > 0 else kwargs.get("sid", "")
-        live_id = args[1] if len(args) > 1 else kwargs.get("live_id", "")
-        anchor_name = args[2] if len(args) > 2 else kwargs.get("anchor_name", "")
-
-        sid = str(sid).strip() if sid else ""
-        live_id = str(live_id).strip() if live_id else ""
-        anchor_name = str(anchor_name).strip() if anchor_name else live_id
-
-        if not sid or not live_id:
-            yield event.plain_result("参数错误。用法: live_sub <sid> <live_id> [主播名称]")
-            return
-
-        try:
-            int(live_id)
-        except ValueError:
-            yield event.plain_result("直播间ID必须是数字。用法: live_sub <sid> <live_id> [主播名称]")
-            return
-
-        subs = await self.get_kv_data("subs", {})
+        subs = await self._get_subs()
 
         if live_id not in subs:
             subs[live_id] = {"sids": [], "anchor_name": anchor_name}
-            self.rooms[live_id] = BilibiliLiveRoom(live_id, anchor_name)
+            self.rooms[live_id] = BilibiliLiveRoom(live_id, anchor_name or str(live_id))
 
         if sid not in subs[live_id]["sids"]:
             subs[live_id]["sids"].append(sid)
-            await self.put_kv_data("subs", subs)
+            await self._save_subs(subs)
             yield event.plain_result(MessageTemplates.msg_sub_success.render(
                 sid=sid, live_id=live_id, anchor_name=anchor_name
             ))
@@ -168,32 +159,15 @@ class BilibiliLiveMonitor(Star):
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @filter.command("live_unsub")
-    async def live_unsub_command(self, event: AstrMessageEvent, *args, **kwargs):
-        """取消订阅直播间通知。参数: sid 直播间ID"""
-        sid = args[0] if len(args) > 0 else kwargs.get("sid", "")
-        live_id = args[1] if len(args) > 1 else kwargs.get("live_id", "")
-
-        sid = str(sid).strip() if sid else ""
-        live_id = str(live_id).strip() if live_id else ""
-
-        if not sid or not live_id:
-            yield event.plain_result("参数错误。用法: live_unsub <sid> <live_id>")
-            return
-
-        try:
-            int(live_id)
-        except ValueError:
-            yield event.plain_result("直播间ID必须是数字。用法: live_unsub <sid> <live_id>")
-            return
-
-        subs = await self.get_kv_data("subs", {})
+    async def live_unsub_command(self, event: AstrMessageEvent, sid: str, live_id: int):
+        subs = await self._get_subs()
         if live_id in subs and sid in subs[live_id]["sids"]:
             subs[live_id]["sids"].remove(sid)
             if not subs[live_id]["sids"]:
                 del subs[live_id]
                 if live_id in self.rooms:
                     del self.rooms[live_id]
-            await self.put_kv_data("subs", subs)
+            await self._save_subs(subs)
             yield event.plain_result(MessageTemplates.msg_unsub_success.render(
                 sid=sid, live_id=live_id
             ))
@@ -202,8 +176,8 @@ class BilibiliLiveMonitor(Star):
                 sid=sid, live_id=live_id
             ))
 
-    async def get_live_info(self, room_id=None):
-        subs = await self.get_kv_data("subs", {})
+    async def get_live_info(self, room_id: Optional[int] = None):
+        subs = await self._get_subs()
 
         if room_id and room_id in self.rooms:
             room = self.rooms[room_id]
@@ -232,19 +206,10 @@ class BilibiliLiveMonitor(Star):
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @filter.command("live_info")
-    async def live_info_command(self, event: AstrMessageEvent, *args, **kwargs):
+    async def live_info_command(self, event: AstrMessageEvent, live_id: Optional[int] = None):
         """获取直播间信息。可选参数: 直播间ID"""
-        live_id = args[0] if len(args) > 1 else kwargs.get("live_id", "")
-        try:
-            if live_id:
-                int(live_id)
-        except ValueError:
-            yield event.plain_result("直播间ID必须是数字。用法: live_info [live_id]")
-            return
-
         info = await self.get_live_info(live_id)
         yield event.plain_result(info)
-
 
     async def terminate(self):
         self.running = False
