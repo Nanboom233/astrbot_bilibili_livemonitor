@@ -17,18 +17,18 @@ def load_metadata():
     yaml_path = os.path.join(os.path.dirname(__file__), "metadata.yaml")
     if not os.path.exists(yaml_path):
         raise FileNotFoundError(f"metadata.yaml 未找到: {yaml_path}")
-        
+
     with open(yaml_path, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f)
-        
+
     if not data:
         raise ValueError("metadata.yaml 为空或格式错误")
-        
+
     required_keys = ["name", "author", "desc", "version", "repo"]
     for key in required_keys:
         if key not in data:
             raise ValueError(f"metadata.yaml 缺少必要字段: {key}")
-            
+
     return data
 
 PLUGIN_META = load_metadata()
@@ -57,7 +57,7 @@ class BilibiliLiveMonitor(Star):
         subs = await self.get_kv_data("subs", {})
         for live_id, data in subs.items():
             self.rooms[live_id] = BilibiliLiveRoom(live_id, data.get("anchor_name", live_id))
-        
+
         asyncio.create_task(self.monitor_task())
 
     async def update_and_notify_room(self, room_id: str, room: BilibiliLiveRoom) -> dict | None:
@@ -83,7 +83,7 @@ class BilibiliLiveMonitor(Star):
 
             subs = await self.get_kv_data("subs", {})
             sids = subs.get(room_id, {}).get("sids", [])
-            
+
             for sid in sids:
                 try:
                     await self.context.send_message(sid, message)
@@ -101,17 +101,17 @@ class BilibiliLiveMonitor(Star):
             )
 
             message = MessageChain().message(msg_text)
-            
+
             subs = await self.get_kv_data("subs", {})
             sids = subs.get(room_id, {}).get("sids", [])
-            
+
             for sid in sids:
                 try:
                     await self.context.send_message(sid, message)
                     logger.info(f"已向会话 {sid} 发送 {room.anchor_name} 下播通知")
                 except Exception as e:
                     logger.error(f"向会话 {sid} 发送下播通知失败: {e}")
-                    
+
             logger.info(f"直播间{room_id}({room.anchor_name})已下播")
 
         return result
@@ -134,21 +134,27 @@ class BilibiliLiveMonitor(Star):
         sid = args[0] if len(args) > 0 else kwargs.get("sid", "")
         live_id = args[1] if len(args) > 1 else kwargs.get("live_id", "")
         anchor_name = args[2] if len(args) > 2 else kwargs.get("anchor_name", "")
-        
+
         sid = str(sid).strip() if sid else ""
         live_id = str(live_id).strip() if live_id else ""
         anchor_name = str(anchor_name).strip() if anchor_name else live_id
-        
+
         if not sid or not live_id:
-            yield event.plain_result("参数错误。用法: /live_sub <sid> <live_id> [主播名称]")
+            yield event.plain_result("参数错误。用法: live_sub <sid> <live_id> [主播名称]")
+            return
+
+        try:
+            int(live_id)
+        except ValueError:
+            yield event.plain_result("直播间ID必须是数字。用法: live_sub <sid> <live_id> [主播名称]")
             return
 
         subs = await self.get_kv_data("subs", {})
-        
+
         if live_id not in subs:
             subs[live_id] = {"sids": [], "anchor_name": anchor_name}
             self.rooms[live_id] = BilibiliLiveRoom(live_id, anchor_name)
-            
+
         if sid not in subs[live_id]["sids"]:
             subs[live_id]["sids"].append(sid)
             await self.put_kv_data("subs", subs)
@@ -166,14 +172,20 @@ class BilibiliLiveMonitor(Star):
         """取消订阅直播间通知。参数: sid 直播间ID"""
         sid = args[0] if len(args) > 0 else kwargs.get("sid", "")
         live_id = args[1] if len(args) > 1 else kwargs.get("live_id", "")
-        
+
         sid = str(sid).strip() if sid else ""
         live_id = str(live_id).strip() if live_id else ""
-        
+
         if not sid or not live_id:
-            yield event.plain_result("参数错误。用法: /live_unsub <sid> <live_id>")
+            yield event.plain_result("参数错误。用法: live_unsub <sid> <live_id>")
             return
-            
+
+        try:
+            int(live_id)
+        except ValueError:
+            yield event.plain_result("直播间ID必须是数字。用法: live_unsub <sid> <live_id>")
+            return
+
         subs = await self.get_kv_data("subs", {})
         if live_id in subs and sid in subs[live_id]["sids"]:
             subs[live_id]["sids"].remove(sid)
@@ -197,11 +209,11 @@ class BilibiliLiveMonitor(Star):
             room = self.rooms[room_id]
             result = await self.update_and_notify_room(room_id, room)
             info = room.get_formatted_info(result)
-            
+
             sids = subs.get(room_id, {}).get("sids", [])
             sids_str = ", ".join(sids) if sids else "无"
             info += MessageTemplates.msg_sub_list.render(sids_str=sids_str)
-            
+
             return info
         else:
             if not self.rooms:
@@ -210,21 +222,29 @@ class BilibiliLiveMonitor(Star):
             for r_id, room in self.rooms.items():
                 result = await self.update_and_notify_room(r_id, room)
                 info = room.get_formatted_info(result)
-                
+
                 sids = subs.get(r_id, {}).get("sids", [])
                 sids_str = ", ".join(sids) if sids else "无"
                 info += MessageTemplates.msg_sub_list.render(sids_str=sids_str)
-                
+
                 all_info.append(info)
             return MessageTemplates.msg_all_info_header.render() + "\n\n".join(all_info)
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @filter.command("live_info")
-    async def live_info_command(self, event: AstrMessageEvent, room_id: str = None):
+    async def live_info_command(self, event: AstrMessageEvent, *args, **kwargs):
         """获取直播间信息。可选参数: 直播间ID"""
-        target_id = str(room_id).strip() if room_id else None
-        info = await self.get_live_info(target_id)
+        live_id = args[0] if len(args) > 1 else kwargs.get("live_id", "")
+        try:
+            if live_id:
+                int(live_id)
+        except ValueError:
+            yield event.plain_result("直播间ID必须是数字。用法: live_info [live_id]")
+            return
+
+        info = await self.get_live_info(live_id)
         yield event.plain_result(info)
+
 
     async def terminate(self):
         self.running = False
