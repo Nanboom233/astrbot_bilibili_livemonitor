@@ -2,6 +2,7 @@ import aiohttp
 import os
 from datetime import datetime
 from astrbot.api import logger
+from typing import Optional
 from .templates import MessageTemplates
 
 class BilibiliLiveRoom:
@@ -60,11 +61,11 @@ class BilibiliLiveRoom:
             logger.error(f"获取直播间{self.room_id}详细信息失败: {str(e)}")
         return None
 
-    async def update_info(self) -> bool | dict:
+    async def update_info(self) -> Optional[dict]:
         try:
             init_data = await self._get_room_init()
             if not init_data:
-                return False
+                return None
             
             room_data = await self._get_room_info()
             
@@ -83,7 +84,7 @@ class BilibiliLiveRoom:
             }
         except Exception as e:
             logger.error(f"更新直播间{self.room_id}信息失败: {str(e)}")
-        return False
+        return None
 
     async def download_cover(self):
         if not self.cover_url:
@@ -142,9 +143,8 @@ class BilibiliLiveRoom:
             logger.warning(f"解析直播间{self.room_id}开播时间失败，使用当前时间替代: {e}")
             self.live_start_time = datetime.now()
 
-    async def get_formatted_info(self) -> str:
-        success = await self.update_info()
-        if not success:
+    def get_formatted_info(self, update_result: dict | None) -> str:
+        if not update_result:
             return MessageTemplates.msg_live_info_fail.render(
                 anchor_name=self.anchor_name,
                 room_id=self.room_id

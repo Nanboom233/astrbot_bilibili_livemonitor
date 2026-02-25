@@ -34,5 +34,53 @@
     "type": "text",
     "hint": "可用变量: {anchor_name}, {room_id}, {room_title}, {last_check_time}, {room_url}, {start_time}, {duration}",
     "default": "直播间ID: {room_id}\n主播: {anchor_name}\n状态: 直播中\n开播时间: {start_time}\n直播时长: {duration}\n标题: {room_title}\n最后检查时间: {last_check_time}\n直播间链接: {room_url}"
+  },
+  "msg_sub_success": {
+    "description": "订阅成功提示",
+    "type": "text",
+    "hint": "可用变量: {sid} 会话ID, {live_id} 房间号, {anchor_name} 主播名",
+    "default": "已为会话 {sid} 订阅直播间 {live_id}({anchor_name})"
+  },
+  "msg_sub_exist": {
+    "description": "已订阅提示",
+    "type": "text",
+    "hint": "可用变量: {sid} 会话ID, {live_id} 房间号",
+    "default": "会话 {sid} 已订阅过该直播间"
+  },
+  "msg_unsub_success": {
+    "description": "取消订阅成功提示",
+    "type": "text",
+    "hint": "可用变量: {sid} 会话ID, {live_id} 房间号",
+    "default": "已取消会话 {sid} 对直播间 {live_id} 的订阅"
+  },
+  "msg_unsub_fail": {
+    "description": "取消订阅失败(未找到)提示",
+    "type": "text",
+    "hint": "可用变量: {sid} 会话ID, {live_id} 房间号",
+    "default": "未找到对应的订阅记录"
+  },
+  "msg_no_subs": {
+    "description": "未订阅任何直播间提示",
+    "type": "text",
+    "hint": "无变量",
+    "default": "当前暂无订阅任何直播间"
+  },
+  "msg_all_info_header": {
+    "description": "所有直播间状态列表前缀",
+    "type": "text",
+    "hint": "无变量",
+    "default": "所有直播间状态\n\n"
+  },
+  "msg_sub_list": {
+    "description": "订阅会话列表后缀",
+    "type": "text",
+    "hint": "可用变量: {sids_str} 会话列表",
+    "default": "\n订阅的会话: {sids_str}"
+  },
+  "msg_cover_fail": {
+    "description": "获取封面失败提示",
+    "type": "text",
+    "hint": "无变量",
+    "default": "<获取封面失败>"
   }
 }

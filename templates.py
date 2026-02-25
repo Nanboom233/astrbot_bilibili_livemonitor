@@ -16,6 +16,14 @@ class MessageTemplates:
     msg_live_info_fail: MessageTemplate
     msg_live_info_offline: MessageTemplate
     msg_live_info_live: MessageTemplate
+    msg_sub_success: MessageTemplate
+    msg_sub_exist: MessageTemplate
+    msg_unsub_success: MessageTemplate
+    msg_unsub_fail: MessageTemplate
+    msg_no_subs: MessageTemplate
+    msg_all_info_header: MessageTemplate
+    msg_sub_list: MessageTemplate
+    msg_cover_fail: MessageTemplate
 
     class MessageTemplate:
         """封装模板文本，统一处理格式化并提供错误回退机制"""
@@ -89,6 +97,38 @@ class MessageTemplates:
                 "最后检查时间: {last_check_time}\n"
                 "直播间链接: {room_url}"
             )
+        )
+        cls.msg_sub_success = MessageTemplates.MessageTemplate(
+            template_str=config.get("msg_sub_success", None),
+            default_template="已为会话 {sid} 订阅直播间 {live_id}({anchor_name})"
+        )
+        cls.msg_sub_exist = MessageTemplates.MessageTemplate(
+            template_str=config.get("msg_sub_exist", None),
+            default_template="会话 {sid} 已订阅过该直播间"
+        )
+        cls.msg_unsub_success = MessageTemplates.MessageTemplate(
+            template_str=config.get("msg_unsub_success", None),
+            default_template="已取消会话 {sid} 对直播间 {live_id} 的订阅"
+        )
+        cls.msg_unsub_fail = MessageTemplates.MessageTemplate(
+            template_str=config.get("msg_unsub_fail", None),
+            default_template="未找到对应的订阅记录"
+        )
+        cls.msg_no_subs = MessageTemplates.MessageTemplate(
+            template_str=config.get("msg_no_subs", None),
+            default_template="当前暂无订阅任何直播间"
+        )
+        cls.msg_all_info_header = MessageTemplates.MessageTemplate(
+            template_str=config.get("msg_all_info_header", None),
+            default_template="所有直播间状态\n\n"
+        )
+        cls.msg_sub_list = MessageTemplates.MessageTemplate(
+            template_str=config.get("msg_sub_list", None),
+            default_template="\n订阅的会话: {sids_str}"
+        )
+        cls.msg_cover_fail = MessageTemplates.MessageTemplate(
+            template_str=config.get("msg_cover_fail", None),
+            default_template="<获取封面失败>"
         )
         if not cls._initialized:
             cls._initialized = True
