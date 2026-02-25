@@ -2,7 +2,7 @@ import aiohttp
 import os
 from datetime import datetime
 from astrbot.api import logger
-from templates import MessageTemplates
+from .templates import MessageTemplates
 
 class BilibiliLiveRoom:
     _session: aiohttp.ClientSession = None
