@@ -198,9 +198,10 @@ class BilibiliLiveMonitor(Star):
             return MessageTemplates.msg_all_info_header.render() + "\n\n".join(all_info)
 
     @filter.command("live_info")
-    async def liveinfo_command(self, event: AstrMessageEvent, room_id: Optional[str] = None):
+    async def live_info_command(self, event: AstrMessageEvent, room_id: str = ""):
         """获取直播间信息。可选参数: 直播间ID"""
-        info = await self.get_live_info(room_id)
+        target_id = room_id.strip() if room_id else None
+        info = await self.get_live_info(target_id)
         yield event.plain_result(info)
 
     async def terminate(self):
