@@ -1,27 +1,38 @@
 {
-  "ids": {
-    "description": "ids",
-    "type": "list",
-    "hint": "直播间id",
-    "default": [21987615]
-    
-  },
-  "names": {
-    "description": "names",
-    "type": "list",
-    "hint": "对应ids的主播名称，与上一项长度相同",
-    "default": ["原神"]
-  },
-  "groups": {
-    "description": "groups",
-    "type": "list",
-    "hint": "qq群列表",
-    "default": [1145141919]
-  },
   "time": {
     "description": "time",
     "type": "int",
-    "hint": "更新间隔",
+    "hint": "更新间隔(秒)",
     "default": 60
+  },
+  "msg_live_start": {
+    "description": "开播通知模板",
+    "type": "text",
+    "hint": "可用变量: {anchor_name} 主播名, {room_title} 标题, {room_url} 直播间链接, {room_id} 房间号",
+    "default": "{anchor_name} 开播了喵！\n{room_title}\n传送门: {room_url}"
+  },
+  "msg_live_end": {
+    "description": "下播通知模板",
+    "type": "text",
+    "hint": "可用变量: {anchor_name} 主播名, {room_id} 房间号",
+    "default": "{anchor_name} 的直播已结束喵。"
+  },
+  "msg_live_info_fail": {
+    "description": "获取直播信息失败模板",
+    "type": "text",
+    "hint": "可用变量: {anchor_name} 主播名, {room_id} 房间号",
+    "default": "直播间{room_id}（{anchor_name}）：无法获取直播信息，请稍后再试"
+  },
+  "msg_live_info_offline": {
+    "description": "未开播状态模板",
+    "type": "text",
+    "hint": "可用变量: {anchor_name}, {room_id}, {room_title}, {last_check_time}, {room_url}",
+    "default": "直播间ID: {room_id}\n主播: {anchor_name}\n状态: 未开播\n标题: {room_title}\n最后检查时间: {last_check_time}\n直播间链接: {room_url}"
+  },
+  "msg_live_info_live": {
+    "description": "开播状态模板",
+    "type": "text",
+    "hint": "可用变量: {anchor_name}, {room_id}, {room_title}, {last_check_time}, {room_url}, {start_time}, {duration}",
+    "default": "直播间ID: {room_id}\n主播: {anchor_name}\n状态: 直播中\n开播时间: {start_time}\n直播时长: {duration}\n标题: {room_title}\n最后检查时间: {last_check_time}\n直播间链接: {room_url}"
   }
 }
