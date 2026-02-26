@@ -1,9 +1,12 @@
-import aiohttp
 import os
 from datetime import datetime
-from astrbot.api import logger
 from typing import Optional
+
+import aiohttp
+from astrbot.api import logger
+
 from .templates import MessageTemplates
+
 
 class BilibiliLiveRoom:
     _session: aiohttp.ClientSession = None
@@ -66,12 +69,12 @@ class BilibiliLiveRoom:
             init_data = await self._get_room_init()
             if not init_data:
                 return None
-            
+
             room_data = await self._get_room_info()
-            
+
             live_status = init_data.get('live_status', 0)
-            live_time = init_data.get('live_time')
-            
+            live_time: int = init_data.get('live_time')
+
             if room_data:
                 self.room_title = room_data.get('title', '无标题')
                 self.cover_url = room_data.get('user_cover', '')
@@ -93,7 +96,7 @@ class BilibiliLiveRoom:
         new_name = f"{self.room_id}.jpg"
         os.makedirs(save_dir, exist_ok=True)
         save_path = os.path.join(save_dir, new_name)
-        
+
         try:
             session = await self.get_session()
             async with session.get(self.cover_url, timeout=15) as resp:
@@ -105,26 +108,26 @@ class BilibiliLiveRoom:
             logger.error(f"异步下载直播间{self.room_id}封面失败: {str(e)}")
             return None
 
-    def _update_status(self, current_status, live_time_str):
+    def _update_status(self, current_status, live_time: int):
         self.last_check_time = datetime.now()
-        
+
         is_new_live = False
         is_new_offline = False
 
         if self.last_status is None:
             self.last_status = current_status
             if current_status == 1:
-                self._parse_live_time(live_time_str)
+                self._parse_live_time(live_time)
                 self.has_sent_live_notice = True
             else:
                 self.has_sent_live_notice = False
-            return False, False 
+            return False, False
 
         if current_status != self.last_status:
             self.last_status = current_status
             if current_status == 1:
                 if not self.has_sent_live_notice:
-                    self._parse_live_time(live_time_str)
+                    self._parse_live_time(live_time)
                     is_new_live = True
             else:
                 self.has_sent_live_notice = False
@@ -133,12 +136,12 @@ class BilibiliLiveRoom:
 
         return is_new_live, is_new_offline
 
-    def _parse_live_time(self, live_time_str):
-        if not live_time_str:
+    def _parse_live_time(self, live_time: int):
+        if not live_time:
             self.live_start_time = datetime.now()
             return
         try:
-            self.live_start_time = datetime.strptime(live_time_str, "%Y-%m-%d %H:%M:%S")
+            self.live_start_time = datetime.strptime(str(live_time), "%Y-%m-%d %H:%M:%S")
         except (ValueError, TypeError) as e:
             logger.warning(f"解析直播间{self.room_id}开播时间失败，使用当前时间替代: {e}")
             self.live_start_time = datetime.now()
@@ -149,9 +152,9 @@ class BilibiliLiveRoom:
                 anchor_name=self.anchor_name,
                 room_id=self.room_id
             )
-        
+
         last_check_time = self.last_check_time.strftime('%Y-%m-%d %H:%M:%S') if self.last_check_time else "未知"
-        
+
         if self.last_status == 1:
             if self.live_start_time:
                 duration_td = datetime.now() - self.live_start_time
@@ -162,7 +165,7 @@ class BilibiliLiveRoom:
             else:
                 start_time = "未知"
                 duration = "未知"
-            
+
             return MessageTemplates.msg_live_info_live.render(
                 anchor_name=self.anchor_name,
                 room_id=self.room_id,
@@ -180,4 +183,3 @@ class BilibiliLiveRoom:
                 room_url=self.room_url,
                 last_check_time=last_check_time
             )
-
