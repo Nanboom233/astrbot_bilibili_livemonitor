@@ -260,6 +260,7 @@ class BilibiliLiveMonitor(Star):
                     start_time_str = start_time_raw
                     
                 sessions[sid] = {
+                    "session_id": sid,
                     "live_id": r.get("live_id", "未知"),
                     "room_title": r.get("room_title", "未知标题"),
                     "anchor_name": r.get("anchor_name", "未知主播"),
@@ -290,7 +291,8 @@ class BilibiliLiveMonitor(Star):
             result_text += MessageTemplates.msg_qlamp_list_group.render(
                 anchor_name=s["anchor_name"],
                 room_title=s["room_title"],
-                start_time=s["start_time_str"]
+                start_time=s["start_time_str"],
+                session_id=s["session_id"]
             )
             for r in s["records"]:
                 result_text += MessageTemplates.msg_qlamp_list_item.render(
@@ -299,6 +301,29 @@ class BilibiliLiveMonitor(Star):
                 )
 
         yield event.plain_result(result_text)
+
+    @filter.permission_type(filter.PermissionType.MEMBER)
+    @filter.command("qlamp_clear")
+    async def qlamp_clear_command(self, event: AstrMessageEvent, session_id: str):
+        umo = event.unified_msg_origin
+        records = await self.get_kv_data("qlamp_records", [])
+
+        if session_id == "*":
+            new_records = [r for r in records if r.get("umo") != umo]
+            deleted_count = len(records) - len(new_records)
+            if deleted_count > 0:
+                await self.put_kv_data("qlamp_records", new_records)
+                yield event.plain_result(MessageTemplates.msg_qlamp_clear_all_success.render())
+            else:
+                yield event.plain_result(MessageTemplates.msg_qlamp_list_empty.render())
+        else:
+            new_records = [r for r in records if not (r.get("umo") == umo and r.get("session_id") == session_id)]
+            deleted_count = len(records) - len(new_records)
+            if deleted_count > 0:
+                await self.put_kv_data("qlamp_records", new_records)
+                yield event.plain_result(MessageTemplates.msg_qlamp_clear_success.render(session_id=session_id))
+            else:
+                yield event.plain_result(MessageTemplates.msg_qlamp_clear_fail.render(session_id=session_id))
 
     @filter.permission_type(filter.PermissionType.MEMBER)
     @filter.command("qlamp")

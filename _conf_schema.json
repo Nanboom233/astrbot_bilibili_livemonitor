@@ -122,13 +122,31 @@
   "msg_qlamp_list_group": {
     "description": "切片列表按场次分组前缀",
     "type": "text",
-    "hint": "可用变量: {anchor_name} 主播名称, {room_title} 标题, {start_time} 开播时间",
-    "default": "\n\n📺 {anchor_name} - {room_title}\n🕒 开播: {start_time}"
+    "hint": "可用变量: {anchor_name} 主播名称, {room_title} 标题, {start_time} 开播时间, {session_id} 场次ID",
+    "default": "\n\n📺 {anchor_name} - {room_title}\n🕒 开播: {start_time} (ID: {session_id})"
   },
   "msg_qlamp_list_item": {
     "description": "切片列表项",
     "type": "text",
     "hint": "可用变量: {time_offset} 相对开播时间, {description} 描述",
     "default": "\n  [{time_offset}] {description}"
+  },
+  "msg_qlamp_clear_success": {
+    "description": "删除单个场次切片成功提示",
+    "type": "text",
+    "hint": "可用变量: {session_id} 场次ID",
+    "default": "已成功删除场次 {session_id} 的切片记录。"
+  },
+  "msg_qlamp_clear_all_success": {
+    "description": "清空会话所有切片成功提示",
+    "type": "text",
+    "hint": "无变量",
+    "default": "已成功清空本会话的所有切片记录。"
+  },
+  "msg_qlamp_clear_fail": {
+    "description": "删除切片失败(未找到)提示",
+    "type": "text",
+    "hint": "可用变量: {session_id} 场次ID",
+    "default": "未找到对应场次 {session_id} 的切片记录。"
   }
 }

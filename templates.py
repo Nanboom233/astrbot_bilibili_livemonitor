@@ -34,6 +34,9 @@ class MessageTemplates:
     msg_qlamp_list_header: MessageTemplate
     msg_qlamp_list_group: MessageTemplate
     msg_qlamp_list_item: MessageTemplate
+    msg_qlamp_clear_success: MessageTemplate
+    msg_qlamp_clear_all_success: MessageTemplate
+    msg_qlamp_clear_fail: MessageTemplate
 
     class MessageTemplate:
         """封装模板文本，统一处理格式化并提供错误回退机制"""
@@ -166,11 +169,23 @@ class MessageTemplates:
         )
         cls.msg_qlamp_list_group = MessageTemplates.MessageTemplate(
             template_str=config.get("msg_qlamp_list_group", None),
-            default_template="\n\n📺 {anchor_name} - {room_title}\n🕒 开播: {start_time}"
+            default_template="\n\n📺 {anchor_name} - {room_title}\n🕒 开播: {start_time} (ID: {session_id})"
         )
         cls.msg_qlamp_list_item = MessageTemplates.MessageTemplate(
             template_str=config.get("msg_qlamp_list_item", None),
             default_template="\n  [{time_offset}] {description}"
+        )
+        cls.msg_qlamp_clear_success = MessageTemplates.MessageTemplate(
+            template_str=config.get("msg_qlamp_clear_success", None),
+            default_template="已成功删除场次 {session_id} 的切片记录。"
+        )
+        cls.msg_qlamp_clear_all_success = MessageTemplates.MessageTemplate(
+            template_str=config.get("msg_qlamp_clear_all_success", None),
+            default_template="已成功清空本会话的所有切片记录。"
+        )
+        cls.msg_qlamp_clear_fail = MessageTemplates.MessageTemplate(
+            template_str=config.get("msg_qlamp_clear_fail", None),
+            default_template="未找到对应场次 {session_id} 的切片记录。"
         )
         if not cls._initialized:
             cls._initialized = True
