@@ -268,7 +268,7 @@ class BilibiliLiveMonitor(Star):
 
     @filter.permission_type(filter.PermissionType.MEMBER)
     @filter.command("qlamp")
-    async def qlamp_command(self, event: AstrMessageEvent, description: str):
+    async def qlamp_command(self, event: AstrMessageEvent, description: str = "No description"):
         umo = event.unified_msg_origin
         default_map = await self.get_kv_data("qlamp_default", {})
         live_id = default_map.get(umo)
