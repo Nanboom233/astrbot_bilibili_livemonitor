@@ -302,7 +302,7 @@ class BilibiliLiveMonitor(Star):
 
         yield event.plain_result(result_text)
 
-    @filter.permission_type(filter.PermissionType.MEMBER)
+    @filter.permission_type(filter.PermissionType.ADMIN)
     @filter.command("qlamp_clear")
     async def qlamp_clear_command(self, event: AstrMessageEvent, session_id: str):
         umo = event.unified_msg_origin
