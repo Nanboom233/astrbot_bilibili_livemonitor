@@ -24,6 +24,15 @@ class MessageTemplates:
     msg_all_info_header: MessageTemplate
     msg_sub_list: MessageTemplate
     msg_cover_fail: MessageTemplate
+    
+    # Qlamp Templates
+    msg_qlamp_set_success: MessageTemplate
+    msg_qlamp_not_set: MessageTemplate
+    msg_qlamp_not_live: MessageTemplate
+    msg_qlamp_record_success: MessageTemplate
+    msg_qlamp_list_empty: MessageTemplate
+    msg_qlamp_list_header: MessageTemplate
+    msg_qlamp_list_item: MessageTemplate
 
     class MessageTemplate:
         """封装模板文本，统一处理格式化并提供错误回退机制"""
@@ -129,6 +138,34 @@ class MessageTemplates:
         cls.msg_cover_fail = MessageTemplates.MessageTemplate(
             template_str=config.get("msg_cover_fail", None),
             default_template="<获取封面失败>"
+        )
+        cls.msg_qlamp_set_success = MessageTemplates.MessageTemplate(
+            template_str=config.get("msg_qlamp_set_success", None),
+            default_template="已将本会话的默认切片直播间设置为 {live_id}"
+        )
+        cls.msg_qlamp_not_set = MessageTemplates.MessageTemplate(
+            template_str=config.get("msg_qlamp_not_set", None),
+            default_template="本会话尚未设置默认直播间，请使用 qlamp_set 命令设置"
+        )
+        cls.msg_qlamp_not_live = MessageTemplates.MessageTemplate(
+            template_str=config.get("msg_qlamp_not_live", None),
+            default_template="当前直播间 {live_id} 未开播或无法获取开播时间"
+        )
+        cls.msg_qlamp_record_success = MessageTemplates.MessageTemplate(
+            template_str=config.get("msg_qlamp_record_success", None),
+            default_template="切片记录成功！\n场次ID: {session_id}\n时间节点: {time_offset}\n描述: {description}"
+        )
+        cls.msg_qlamp_list_empty = MessageTemplates.MessageTemplate(
+            template_str=config.get("msg_qlamp_list_empty", None),
+            default_template="暂无切片记录"
+        )
+        cls.msg_qlamp_list_header = MessageTemplates.MessageTemplate(
+            template_str=config.get("msg_qlamp_list_header", None),
+            default_template="切片记录 第 {page}/{total_pages} 页："
+        )
+        cls.msg_qlamp_list_item = MessageTemplates.MessageTemplate(
+            template_str=config.get("msg_qlamp_list_item", None),
+            default_template="\n- [{session_id}] {time_offset}: {description}"
         )
         if not cls._initialized:
             cls._initialized = True

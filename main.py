@@ -1,5 +1,7 @@
 import asyncio
 import os
+from datetime import datetime
+from typing import Optional
 
 import yaml
 from astrbot.api import AstrBotConfig
@@ -10,7 +12,6 @@ from astrbot.api.star import Context, Star, register
 
 from .bilibili import BilibiliLiveRoom
 from .templates import MessageTemplates
-from typing import Optional
 
 
 def load_metadata():
@@ -59,6 +60,7 @@ class BilibiliLiveMonitor(Star):
 
     async def _get_subs(self) -> dict:
         subs = await self.get_kv_data("subs", {})
+        # {"sids": [], "anchor_name": anchor_name}
         return {int(k): v for k, v in subs.items()}
 
     async def _save_subs(self, subs: dict):
@@ -147,7 +149,8 @@ class BilibiliLiveMonitor(Star):
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @filter.command("live_sub")
-    async def live_sub_command(self, event: AstrMessageEvent, sid: str, live_id: int, anchor_name: Optional[str] = None):
+    async def live_sub_command(self, event: AstrMessageEvent, sid: str, live_id: int,
+                               anchor_name: Optional[str] = None):
         """订阅直播间通知。参数: sid 直播间ID [主播名称]"""
         subs = await self._get_subs()
 
@@ -219,6 +222,95 @@ class BilibiliLiveMonitor(Star):
         """获取直播间信息。可选参数: 直播间ID"""
         info = await self.get_live_info(live_id)
         yield event.plain_result(info)
+
+    @filter.permission_type(filter.PermissionType.ADMIN)
+    @filter.command("qlamp_set")
+    async def qlamp_set_command(self, event: AstrMessageEvent, live_id: int):
+        umo = event.unified_msg_origin
+        default_map = await self.get_kv_data("qlamp_default", {})
+        default_map[umo] = live_id
+        await self.put_kv_data("qlamp_default", default_map)
+        yield event.plain_result(MessageTemplates.msg_qlamp_set_success.render(live_id=live_id))
+
+    @filter.permission_type(filter.PermissionType.MEMBER)
+    @filter.command("qlamp_list")
+    async def qlamp_list_command(self, event: AstrMessageEvent, page: int = 1):
+        umo = event.unified_msg_origin
+
+        records = await self.get_kv_data("qlamp_records", [])
+
+        # 仅过滤出当前会话(umo)的记录
+        records = [r for r in records if r.get("umo") == umo]
+
+        if not records:
+            yield event.plain_result(MessageTemplates.msg_qlamp_list_empty.render())
+            return
+
+        items_per_page = 10
+        total_pages = (len(records) + items_per_page - 1) // items_per_page
+
+        page = max(1, min(page, total_pages))
+        start_idx = (page - 1) * items_per_page
+        end_idx = start_idx + items_per_page
+
+        reversed_records = list(reversed(records))
+        page_records = reversed_records[start_idx:end_idx]
+
+        result_text = MessageTemplates.msg_qlamp_list_header.render(page=page, total_pages=total_pages)
+        for r in page_records:
+            result_text += MessageTemplates.msg_qlamp_list_item.render(
+                session_id=r["session_id"],
+                time_offset=r["time_offset"],
+                description=r["description"]
+            )
+
+        yield event.plain_result(result_text)
+
+    @filter.permission_type(filter.PermissionType.MEMBER)
+    @filter.command("qlamp")
+    async def qlamp_command(self, event: AstrMessageEvent, description: str):
+        umo = event.unified_msg_origin
+        default_map = await self.get_kv_data("qlamp_default", {})
+        live_id = default_map.get(umo)
+
+        if not live_id:
+            yield event.plain_result(MessageTemplates.msg_qlamp_not_set.render())
+            return
+
+        room = self.rooms.get(live_id)
+        if not room:
+            room = BilibiliLiveRoom(live_id, str(live_id))
+
+        # 强制更新一次以获取最新状态
+        await room.update_info()
+
+        if room.last_status != 1 or not room.live_start_time:
+            yield event.plain_result(MessageTemplates.msg_qlamp_not_live.render(live_id=live_id))
+            return
+
+        duration_td = datetime.now() - room.live_start_time
+        hours, remainder = divmod(duration_td.total_seconds(), 3600)
+        minutes, seconds = divmod(remainder, 60)
+        time_offset = f"{int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}"
+
+        session_id = f"{live_id}_{room.live_start_time.strftime('%Y%m%d%H%M%S')}"
+
+        records = await self.get_kv_data("qlamp_records", [])
+        records.append({
+            "session_id": session_id,
+            "live_id": live_id,
+            "time_offset": time_offset,
+            "description": description,
+            "umo": umo,
+            "timestamp": datetime.now().timestamp()
+        })
+        await self.put_kv_data("qlamp_records", records)
+
+        yield event.plain_result(MessageTemplates.msg_qlamp_record_success.render(
+            session_id=session_id,
+            time_offset=time_offset,
+            description=description
+        ))
 
     async def terminate(self):
         self.running = False

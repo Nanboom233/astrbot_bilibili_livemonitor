@@ -82,5 +82,47 @@
     "type": "text",
     "hint": "无变量",
     "default": "<获取封面失败>"
+  },
+  "msg_qlamp_set_success": {
+    "description": "设置切片默认直播间成功提示",
+    "type": "text",
+    "hint": "可用变量: {live_id} 房间号",
+    "default": "已将本会话的默认切片直播间设置为 {live_id}"
+  },
+  "msg_qlamp_not_set": {
+    "description": "未设置默认切片直播间提示",
+    "type": "text",
+    "hint": "无变量",
+    "default": "本会话尚未设置默认直播间，请使用 qlamp_set 命令设置"
+  },
+  "msg_qlamp_not_live": {
+    "description": "切片时直播间未开播提示",
+    "type": "text",
+    "hint": "可用变量: {live_id} 房间号",
+    "default": "当前直播间 {live_id} 未开播或无法获取开播时间"
+  },
+  "msg_qlamp_record_success": {
+    "description": "切片记录成功提示",
+    "type": "text",
+    "hint": "可用变量: {session_id} 场次ID, {time_offset} 相对开播时间, {description} 描述",
+    "default": "切片记录成功！\n场次ID: {session_id}\n时间节点: {time_offset}\n描述: {description}"
+  },
+  "msg_qlamp_list_empty": {
+    "description": "切片列表为空提示",
+    "type": "text",
+    "hint": "无变量",
+    "default": "暂无切片记录"
+  },
+  "msg_qlamp_list_header": {
+    "description": "切片列表前缀",
+    "type": "text",
+    "hint": "可用变量: {page} 当前页, {total_pages} 总页数",
+    "default": "切片记录 第 {page}/{total_pages} 页："
+  },
+  "msg_qlamp_list_item": {
+    "description": "切片列表项",
+    "type": "text",
+    "hint": "可用变量: {session_id} 场次ID, {time_offset} 相对开播时间, {description} 描述",
+    "default": "\n- [{session_id}] {time_offset}: {description}"
   }
 }
