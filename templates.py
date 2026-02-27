@@ -32,6 +32,7 @@ class MessageTemplates:
     msg_qlamp_record_success: MessageTemplate
     msg_qlamp_list_empty: MessageTemplate
     msg_qlamp_list_header: MessageTemplate
+    msg_qlamp_list_group: MessageTemplate
     msg_qlamp_list_item: MessageTemplate
 
     class MessageTemplate:
@@ -163,9 +164,13 @@ class MessageTemplates:
             template_str=config.get("msg_qlamp_list_header", None),
             default_template="切片记录 第 {page}/{total_pages} 页："
         )
+        cls.msg_qlamp_list_group = MessageTemplates.MessageTemplate(
+            template_str=config.get("msg_qlamp_list_group", None),
+            default_template="\n\n📺 {anchor_name} - {room_title}\n🕒 开播: {start_time}"
+        )
         cls.msg_qlamp_list_item = MessageTemplates.MessageTemplate(
             template_str=config.get("msg_qlamp_list_item", None),
-            default_template="\n- [{session_id}] {time_offset}: {description}"
+            default_template="\n  [{time_offset}] {description}"
         )
         if not cls._initialized:
             cls._initialized = True

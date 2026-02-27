@@ -119,10 +119,16 @@
     "hint": "可用变量: {page} 当前页, {total_pages} 总页数",
     "default": "切片记录 第 {page}/{total_pages} 页："
   },
+  "msg_qlamp_list_group": {
+    "description": "切片列表按场次分组前缀",
+    "type": "text",
+    "hint": "可用变量: {anchor_name} 主播名称, {room_title} 标题, {start_time} 开播时间",
+    "default": "\n\n📺 {anchor_name} - {room_title}\n🕒 开播: {start_time}"
+  },
   "msg_qlamp_list_item": {
     "description": "切片列表项",
     "type": "text",
-    "hint": "可用变量: {session_id} 场次ID, {time_offset} 相对开播时间, {description} 描述",
-    "default": "\n- [{session_id}] {time_offset}: {description}"
+    "hint": "可用变量: {time_offset} 相对开播时间, {description} 描述",
+    "default": "\n  [{time_offset}] {description}"
   }
 }

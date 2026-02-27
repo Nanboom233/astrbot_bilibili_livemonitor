@@ -136,12 +136,16 @@ class BilibiliLiveRoom:
 
         return is_new_live, is_new_offline
 
-    def _parse_live_time(self, live_time: int):
+    def _parse_live_time(self, live_time):
         if not live_time:
             self.live_start_time = datetime.now()
             return
         try:
-            self.live_start_time = datetime.strptime(str(live_time), "%Y-%m-%d %H:%M:%S")
+            # 如果是时间戳格式（整数或者可以转为整数的字符串，且长度在10左右）
+            if isinstance(live_time, int) or (isinstance(live_time, str) and live_time.isdigit()):
+                self.live_start_time = datetime.fromtimestamp(int(live_time))
+            else:
+                self.live_start_time = datetime.strptime(str(live_time), "%Y-%m-%d %H:%M:%S")
         except (ValueError, TypeError) as e:
             logger.warning(f"解析直播间{self.room_id}开播时间失败，使用当前时间替代: {e}")
             self.live_start_time = datetime.now()

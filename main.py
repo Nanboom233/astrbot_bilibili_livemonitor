@@ -246,23 +246,57 @@ class BilibiliLiveMonitor(Star):
             yield event.plain_result(MessageTemplates.msg_qlamp_list_empty.render())
             return
 
-        items_per_page = 10
-        total_pages = (len(records) + items_per_page - 1) // items_per_page
+        # 按 session_id 分组，保证同一场次的切片在一起
+        sessions = {}
+        for r in reversed(records):  # 倒序遍历，最新的场次排在前面
+            sid = r["session_id"]
+            if sid not in sessions:
+                # 尝试从 session_id 提取开播时间
+                start_time_raw = sid.split("_")[-1] if "_" in sid else ""
+                try:
+                    start_time_dt = datetime.strptime(start_time_raw, "%Y%m%d%H%M%S")
+                    start_time_str = start_time_dt.strftime("%Y-%m-%d %H:%M")
+                except (ValueError, TypeError):
+                    start_time_str = start_time_raw
+                    
+                sessions[sid] = {
+                    "live_id": r.get("live_id", "未知"),
+                    "room_title": r.get("room_title", "未知标题"),
+                    "anchor_name": r.get("anchor_name", "未知主播"),
+                    "start_time_str": start_time_str,
+                    "records": []
+                }
+            sessions[sid]["records"].append(r)
+            
+        # 让每个场次内的记录按时间正序排列
+        for sid in sessions:
+            sessions[sid]["records"].reverse()
 
+        session_list = list(sessions.values())
+
+        items_per_page = 3  # 每页显示 3 个场次
+        total_pages = (len(session_list) + items_per_page - 1) // items_per_page
+        if total_pages == 0:
+            total_pages = 1
+            
         page = max(1, min(page, total_pages))
         start_idx = (page - 1) * items_per_page
         end_idx = start_idx + items_per_page
-
-        reversed_records = list(reversed(records))
-        page_records = reversed_records[start_idx:end_idx]
+        
+        page_sessions = session_list[start_idx:end_idx]
 
         result_text = MessageTemplates.msg_qlamp_list_header.render(page=page, total_pages=total_pages)
-        for r in page_records:
-            result_text += MessageTemplates.msg_qlamp_list_item.render(
-                session_id=r["session_id"],
-                time_offset=r["time_offset"],
-                description=r["description"]
+        for s in page_sessions:
+            result_text += MessageTemplates.msg_qlamp_list_group.render(
+                anchor_name=s["anchor_name"],
+                room_title=s["room_title"],
+                start_time=s["start_time_str"]
             )
+            for r in s["records"]:
+                result_text += MessageTemplates.msg_qlamp_list_item.render(
+                    time_offset=r["time_offset"],
+                    description=r["description"]
+                )
 
         yield event.plain_result(result_text)
 
@@ -291,7 +325,12 @@ class BilibiliLiveMonitor(Star):
         duration_td = datetime.now() - room.live_start_time
         hours, remainder = divmod(duration_td.total_seconds(), 3600)
         minutes, seconds = divmod(remainder, 60)
-        time_offset = f"{int(hours):02d}:{int(minutes):02d}:{int(seconds):02d}"
+        
+        # 更为 user-friendly 的时间格式
+        if hours > 0:
+            time_offset = f"{int(hours)}:{int(minutes):02d}:{int(seconds):02d}"
+        else:
+            time_offset = f"{int(minutes):02d}:{int(seconds):02d}"
 
         session_id = f"{live_id}_{room.live_start_time.strftime('%Y%m%d%H%M%S')}"
 
@@ -299,6 +338,8 @@ class BilibiliLiveMonitor(Star):
         records.append({
             "session_id": session_id,
             "live_id": live_id,
+            "room_title": room.room_title,
+            "anchor_name": room.anchor_name,
             "time_offset": time_offset,
             "description": description,
             "umo": umo,
