@@ -239,8 +239,9 @@ class BilibiliLiveMonitor(Star):
 
         records = await self.get_kv_data("qlamp_records", [])
 
-        # 仅过滤出当前会话(umo)的记录
-        records = [r for r in records if r.get("umo") == umo]
+        # 仅过滤出当前会话(umo)的所有可能的直播间id
+        available_live_ids = {r.get("session_id") for r in records if r.get("umo") == umo}
+        records = [r for r in records if r.get("session_id") in available_live_ids]
 
         if not records:
             yield event.plain_result(MessageTemplates.msg_qlamp_list_empty.render())
@@ -317,7 +318,7 @@ class BilibiliLiveMonitor(Star):
             else:
                 yield event.plain_result(MessageTemplates.msg_qlamp_list_empty.render())
         else:
-            new_records = [r for r in records if not (r.get("umo") == umo and r.get("session_id") == session_id)]
+            new_records = [r for r in records if not (r.get("session_id") == session_id)]
             deleted_count = len(records) - len(new_records)
             if deleted_count > 0:
                 await self.put_kv_data("qlamp_records", new_records)
