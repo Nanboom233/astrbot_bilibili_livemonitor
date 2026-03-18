@@ -300,6 +300,7 @@ class BilibiliLiveMonitor(Star):
                     time_offset=r["time_offset"],
                     description=r["description"]
                 )
+            result_text += "\n"
 
         yield event.plain_result(result_text)
 
